@@ -38,7 +38,7 @@ Describe "Orchestrator execution" {
         }
         # Mock GitAdapter.Remove-Worktree
         Mock -ModuleName GitAdapter -CommandName Remove-Worktree {
-            param($RepoPath,$WorktreePath,[switch]$Force) | Out-Null
+            param($RepoPath,$WorktreePath,[switch]$Force)
         }
         # Mock AiderAdapter.Invoke-Aider to simulate some work
         Mock -ModuleName AiderAdapter -CommandName Invoke-Aider {
@@ -47,7 +47,7 @@ Describe "Orchestrator execution" {
         }
         # Mock Tui.Show-Status to avoid console output
         Mock -ModuleName Tui -CommandName Show-Status {
-            param($StatusMap) | Out-Null
+            param($StatusMap)
         }
         # Execute orchestrator with concurrency 1 to force sequential execution
         Start-Orchestration -PlanPath $planPath -DependenciesPath $depsPath -Concurrency 1
