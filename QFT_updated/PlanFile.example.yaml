@@ -1,0 +1,12 @@
+repoPath: "/path/to/repo"
+workstreams:
+  - id: ws-001
+    name: "Example Workstream A"
+    worktree: "qft-ws-a"
+    promptFile: "prompts/ws-a.md"
+  - id: ws-002
+    name: "Example Workstream B"
+    worktree: "qft-ws-b"
+    promptFile: "prompts/ws-b.md"
+    dependsOn:
+      - ws-001

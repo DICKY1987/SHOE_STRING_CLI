@@ -1,0 +1,4 @@
+dependencies:
+  - target: ws-002
+    dependsOn:
+      - ws-001

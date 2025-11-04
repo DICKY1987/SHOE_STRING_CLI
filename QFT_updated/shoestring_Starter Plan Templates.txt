@@ -1,0 +1,321 @@
+
+
+---
+
+# 1) Starter Plan Templates
+
+Pick **one** (YAML is easiest to read/edit; JSON has no comments).
+
+## YAML (recommended)
+
+```yaml
+# plan/phase_plan.yaml  (example)
+repoPath: C:\Projects\YourRepo      # absolute or relative path to a local Git repo
+workstreams:
+  - id: ws-001
+    name: "Refactor utilities"
+    worktree: "ws-001-refactor-utilities"   # branch/worktree name
+    promptFile: "prompts/refactor_utilities.md"
+
+  - id: ws-002
+    name: "Add parser tests"
+    worktree: "ws-002-parser-tests"
+    promptFile: "prompts/add_parser_tests.md"
+    dependsOn: ["ws-001"]   # this one will run after ws-001
+```
+
+### Optional dependency overrides (if you don’t want them in the plan file):
+
+```yaml
+# plan/dependencies.yaml (optional)
+dependencies:
+  - target: ws-002
+    dependsOn: ["ws-001"]
+```
+
+## JSON (if you prefer)
+
+```json
+{
+  "repoPath": "C:\\Projects\\YourRepo",
+  "workstreams": [
+    {
+      "id": "ws-001",
+      "name": "Refactor utilities",
+      "worktree": "ws-001-refactor-utilities",
+      "promptFile": "prompts/refactor_utilities.md"
+    },
+    {
+      "id": "ws-002",
+      "name": "Add parser tests",
+      "worktree": "ws-002-parser-tests",
+      "promptFile": "prompts/add_parser_tests.md",
+      "dependsOn": ["ws-001"]
+    }
+  ]
+}
+```
+
+> Tip: Put your prompt files inside the repo (e.g., `prompts/...`) so they’re available inside each worktree.
+
+---
+
+# 2) Commit/Push & Auto-PR Post-Step
+
+Below are **drop-in** additions to your existing modules. They will:
+
+* Commit any changes produced by Aider in the worktree
+* Push the branch to `origin`
+* Open a GitHub Pull Request (via `gh`) targeting your base branch (`main` by default, auto-detected if omitted)
+
+> **Prereqs**
+>
+> * GitHub CLI installed and authenticated: `gh auth login`
+> * Your repo’s `origin` remote points to GitHub
+> * The base branch exists (`main`/`master` etc.)
+
+---
+
+## 2.1. Update `src/Adapters/GitAdapter.ps1`
+
+**Add these functions** (near the bottom, before the existing `Export-ModuleMember` lines):
+
+```powershell
+function Get-DefaultBranch {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$RepoPath)
+    Push-Location $RepoPath
+    try {
+        $ref = git symbolic-ref --quiet refs/remotes/origin/HEAD 2>$null
+        if ($LASTEXITCODE -eq 0 -and $ref) {
+            # refs/remotes/origin/main -> "main"
+            $parts = $ref.Trim() -split '/'
+            return $parts[-1]
+        }
+        # Fallback
+        $remoteShow = git remote show origin 2>$null
+        foreach ($line in $remoteShow) {
+            if ($line -match 'HEAD branch:\s*(.+)$') { return $Matches[1].Trim() }
+        }
+        return 'main'
+    } finally {
+        Pop-Location
+    }
+}
+
+function Commit-And-Push {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoPath,
+        [Parameter(Mandatory)][string]$WorktreePath,
+        [Parameter(Mandatory)][string]$BranchName,
+        [Parameter(Mandatory)][string]$CommitMessage
+    )
+    Push-Location $WorktreePath
+    try {
+        git add -A | Out-Null
+        $dirty = git status --porcelain
+        if (-not [string]::IsNullOrWhiteSpace(($dirty -join '').Trim())) {
+            git commit -m $CommitMessage | Out-Null
+            git push -u origin $BranchName | Out-Null
+            return $true
+        } else {
+            Write-Host "[GIT] No changes to commit for $BranchName" -ForegroundColor DarkGray
+            # Ensure upstream branch exists even if empty (no diffs)
+            git push -u origin $BranchName | Out-Null
+            return $false
+        }
+    } finally {
+        Pop-Location
+    }
+}
+
+function Open-PullRequest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepoPath,
+        [Parameter(Mandatory)][string]$HeadBranch,
+        [string]$BaseBranch,
+        [Parameter(Mandatory)][string]$Title,
+        [string]$Body = ""
+    )
+    Push-Location $RepoPath
+    try {
+        if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            Write-Warning "GitHub CLI (gh) not found; skipping PR creation."
+            return $false
+        }
+        if (-not $BaseBranch) {
+            $BaseBranch = Get-DefaultBranch -RepoPath $RepoPath
+        }
+        $args = @('pr','create','--head', $HeadBranch, '--base', $BaseBranch, '--title', $Title)
+        if ($Body) { $args += @('--body', $Body) } else { $args += '--fill' }
+        gh @args | Out-Null
+        return $true
+    } finally {
+        Pop-Location
+    }
+}
+```
+
+**Extend the exports** at the end of the file to include the new functions (keep the existing ones, add these three):
+
+```powershell
+Export-ModuleMember -Function New-Worktree,Remove-Worktree,Get-WorktreeStatus
+Export-ModuleMember -Function Ensure-Branch,Checkout-Branch,Push-Branch,Prune-Worktrees
+Export-ModuleMember -Function Commit-And-Push,Open-PullRequest,Get-DefaultBranch
+```
+
+---
+
+## 2.2. Update `src/Application/Orchestrator.ps1`
+
+**Add three new parameters** to `Start-Orchestration`:
+
+```powershell
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)][string]$PlanPath,
+    [string]$DependenciesPath,
+    [int]$Concurrency = 5,
+    [switch]$Verbose,
+
+    # NEW: commit & PR automation
+    [switch]$CreatePullRequest,
+    [string]$BaseBranch = $null,   # auto-detected if null
+    [string]$CommitMessageTemplate = "feat(workstream): {id} - {name} via Aider"
+)
+```
+
+### A) **Sequential path** (when `-Concurrency 1`)
+
+Right **after** a successful `Invoke-Aider` call (and **before** removing the worktree), insert:
+
+```powershell
+# ----- Post-step: commit, push, PR -----
+$commitMsg = $CommitMessageTemplate `
+    -replace '\{id\}', $ws.id `
+    -replace '\{name\}', $ws.name
+
+try {
+    $null = Commit-And-Push -RepoPath $repo `
+        -WorktreePath $wtPath `
+        -BranchName $ws.worktree `
+        -CommitMessage $commitMsg
+} catch {
+    Log-Message -Message "Commit/push failed for $($ws.id): $_" -Level "warn"
+}
+
+if ($CreatePullRequest) {
+    $prTitle = "feat: $($ws.name) [$($ws.id)]"
+    $prBody  = "Automated changes for workstream `$($ws.id)` using prompt `$($ws.promptFile)`."
+    try {
+        $null = Open-PullRequest -RepoPath $repo `
+            -HeadBranch $ws.worktree `
+            -BaseBranch $BaseBranch `
+            -Title $prTitle `
+            -Body $prBody
+    } catch {
+        Log-Message -Message "PR creation failed for $($ws.id): $_" -Level "warn"
+    }
+}
+# --------------------------------------
+```
+
+Then your existing `Remove-Worktree` call runs as before.
+
+### B) **Concurrent path** (when `-Concurrency > 1`)
+
+In the `Start-Job` scriptblock **parameter list**, add the new arguments:
+
+```powershell
+$jobs[$id] = Start-Job -ScriptBlock {
+    param($wsParam, $repoParam, $createPR, $baseBranch, $commitTemplate)
+    Import-Module "$using:PSScriptRoot/../Adapters/AiderAdapter.ps1" -Force
+    Import-Module "$using:PSScriptRoot/../Adapters/GitAdapter.ps1" -Force
+    Import-Module "$using:PSScriptRoot/../Adapters/Tui.ps1" -Force
+    try {
+        $wt = Join-Path -Path $repoParam -ChildPath $wsParam.worktree
+        Invoke-Aider -RepoPath $repoParam -WorktreePath $wt -PromptFile $wsParam.promptFile -Name $wsParam.id
+
+        # ----- Post-step: commit, push, PR -----
+        $commitMsg = $commitTemplate `
+            -replace '\{id\}', $wsParam.id `
+            -replace '\{name\}', $wsParam.name
+        try {
+            $null = Commit-And-Push -RepoPath $repoParam `
+                -WorktreePath $wt `
+                -BranchName $wsParam.worktree `
+                -CommitMessage $commitMsg
+        } catch {
+            Log-Message -Message "Commit/push failed for $($wsParam.id): $_" -Level "warn"
+        }
+
+        if ($createPR) {
+            $prTitle = "feat: $($wsParam.name) [$($wsParam.id)]"
+            $prBody  = "Automated changes for workstream `$($wsParam.id)` using prompt `$($wsParam.promptFile)`."
+            try {
+                $null = Open-PullRequest -RepoPath $repoParam `
+                    -HeadBranch $wsParam.worktree `
+                    -BaseBranch $baseBranch `
+                    -Title $prTitle `
+                    -Body $prBody
+            } catch {
+                Log-Message -Message "PR creation failed for $($wsParam.id): $_" -Level "warn"
+            }
+        }
+        # --------------------------------------
+    } catch {
+        throw $_
+    }
+} -ArgumentList $ws, $repo, $CreatePullRequest.IsPresent, $BaseBranch, $CommitMessageTemplate
+```
+
+Everything else (status updates, worktree removal) stays the same.
+
+---
+
+# 3) How to Run
+
+From the repo root (where your `src/` folder lives):
+
+```powershell
+# 1) Ensure gh is logged in
+gh auth login
+
+# 2) Import orchestrator
+Import-Module .\src\Application\Orchestrator.ps1 -Force
+
+# 3) Run with auto-PRs (base branch auto-detected if omitted)
+Start-Orchestration `
+  -PlanPath .\plan\phase_plan.yaml `
+  -DependenciesPath .\plan\dependencies.yaml `
+  -Concurrency 2 `
+  -CreatePullRequest `
+  -Verbose
+
+# Or, set an explicit base:
+#  -BaseBranch main
+```
+
+**What you’ll see**
+
+* Each workstream:
+
+  1. creates a worktree/branch
+  2. runs Aider with its prompt file
+  3. commits & pushes any changes
+  4. opens a PR against the base branch
+  5. removes the local worktree (remote branch remains for the PR)
+
+---
+
+# 4) Notes & Safeguards
+
+* If Aider makes **no changes**, we still push the (possibly empty) branch to set up a PR; GitHub may not open a PR if there’s truly nothing to merge. The code logs what happened.
+* If `gh` isn’t installed or authenticated, PR creation is **skipped** with a warning, but commits/pushes still run.
+* You can customize the commit message via `-CommitMessageTemplate` (supports `{id}` and `{name}` macros).
+
+---
+
+

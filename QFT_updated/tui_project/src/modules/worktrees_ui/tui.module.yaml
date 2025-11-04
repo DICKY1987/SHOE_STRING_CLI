@@ -1,0 +1,15 @@
+module_id: worktrees_ui
+semver: "0.1.0"
+contract_semver: "1.0.0"
+routes:
+  - id: worktrees
+    title: Worktrees
+    slot: nav
+widgets: []
+commands:
+  - id: worktrees.refresh
+    description: Refresh list of worktrees
+keybindings:
+  - key: w
+    command: worktrees.refresh
+capabilities_required: []
