@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cli-orchestrator.dev/schemas/powershell/git_worktree_status.v1.schema.json",
+  "title": "Git Worktree Status",
+  "description": "Status of Git worktrees managed by PowerShell_deterministi_factory",
+  "type": "object",
+  "required": ["timestamp", "main_repo_path", "worktrees"],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when status was captured"
+    },
+    "main_repo_path": {
+      "type": "string",
+      "description": "Path to the main repository"
+    },
+    "current_branch": {
+      "type": "string",
+      "description": "Currently active branch in main repo"
+    },
+    "worktrees": {
+      "type": "array",
+      "description": "List of active worktrees",
+      "items": {
+        "type": "object",
+        "required": ["path", "branch", "commit", "is_bare"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to worktree"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Branch checked out in this worktree"
+          },
+          "commit": {
+            "type": "string",
+            "description": "Current commit SHA (short or full)"
+          },
+          "is_bare": {
+            "type": "boolean",
+            "description": "Whether this is a bare worktree"
+          },
+          "is_detached": {
+            "type": "boolean",
+            "description": "Whether HEAD is detached"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When worktree was created"
+          },
+          "lock_reason": {
+            "type": "string",
+            "description": "Reason if worktree is locked"
+          },
+          "prunable": {
+            "type": "boolean",
+            "description": "Whether worktree can be pruned"
+          }
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "description": "Summary statistics",
+      "properties": {
+        "total_worktrees": {
+          "type": "integer",
+          "description": "Total number of worktrees"
+        },
+        "active_worktrees": {
+          "type": "integer",
+          "description": "Number of non-prunable worktrees"
+        },
+        "locked_worktrees": {
+          "type": "integer",
+          "description": "Number of locked worktrees"
+        },
+        "detached_heads": {
+          "type": "integer",
+          "description": "Number of worktrees with detached HEAD"
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "description": "Available worktree operations",
+      "items": {
+        "type": "object",
+        "required": ["operation", "available"],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": ["create", "remove", "lock", "unlock", "prune", "repair"],
+            "description": "Worktree operation type"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "Whether operation is currently available"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason if operation is unavailable"
+          }
+        }
+      }
+    }
+  }
+}
