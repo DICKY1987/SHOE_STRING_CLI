@@ -17,6 +17,7 @@ from .help_registry import get_global_registry
 __all__ = [
     "CLIParser",
     "ParsedArgs",
+    "create_parser",
 ]
 
 
