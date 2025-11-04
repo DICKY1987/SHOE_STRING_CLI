@@ -35,8 +35,8 @@ function Test-PlanFile {
     }
     # Parse plan into object
     $planObj = Get-PlanObject -Path $Path
-    # Serialize to JSON for schema validation
-    $planJson = $planObj | ConvertTo-Json -Depth 10
+    # Serialize to JSON for schema validation (increased depth for complex plans)
+    $planJson = $planObj | ConvertTo-Json -Depth 20 -Compress
     # Validate against provided schema if Test-Json is available
     $schemaContent = Get-Content -Path $SchemaPath -Raw
     if (Get-Command Test-Json -ErrorAction SilentlyContinue) {
@@ -66,6 +66,7 @@ function Check-PlanIntegrity {
     if (-not $Plan.workstreams) { return $false }
     # Check for duplicate IDs and build lookup
     $ids = @{}
+    $wsLookup = @{}
     foreach ($ws in $Plan.workstreams) {
         if (-not $ws.id) { return $false }
         if ($ids.ContainsKey($ws.id)) {
@@ -73,6 +74,7 @@ function Check-PlanIntegrity {
             return $false
         }
         $ids[$ws.id] = $true
+        $wsLookup[$ws.id] = $ws
     }
     # Check dependencies refer to existing workstreams
     foreach ($ws in $Plan.workstreams) {
@@ -94,7 +96,7 @@ function Check-PlanIntegrity {
         if ($visited[$id]) { return $false }
         $visited[$id] = $true
         $stack[$id] = $true
-        $ws = $Plan.workstreams | Where-Object { $_.id -eq $id }
+        $ws = $wsLookup[$id]
         if ($ws -and $ws.dependsOn) {
             foreach ($d in $ws.dependsOn) {
                 if (HasCycle $d) { return $true }

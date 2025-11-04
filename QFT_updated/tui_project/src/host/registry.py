@@ -101,10 +101,16 @@ def merge_module_metadata(mod_infos: List[ModuleInfo]) -> MergeResult:
     command_selections: Dict[str, ModuleInfo] = {}
     # key -> list of (ModuleInfo, keybinding dict)
     keybindings: Dict[str, List[Tuple[ModuleInfo, Dict[str, Any]]]] = {}
+    # Cache Version objects to avoid repeated parsing
+    version_cache: Dict[str, Version] = {}
 
     for mod_info in mod_infos:
         manifest = mod_info.manifest
-        mod_semver = Version(manifest["semver"])
+        semver_str = manifest["semver"]
+        # Use cached Version object if available
+        if semver_str not in version_cache:
+            version_cache[semver_str] = Version(semver_str)
+        mod_semver = version_cache[semver_str]
         # Build module to inspect its metadata. We ignore the returned
         # functions at this stage; only the identifiers are needed.
         try:
@@ -124,7 +130,10 @@ def merge_module_metadata(mod_infos: List[ModuleInfo]) -> MergeResult:
                 route_selections[rid] = (mod_info, route)
             else:
                 existing_mod, _ = existing
-                existing_semver = Version(existing_mod.manifest["semver"])
+                existing_semver_str = existing_mod.manifest["semver"]
+                if existing_semver_str not in version_cache:
+                    version_cache[existing_semver_str] = Version(existing_semver_str)
+                existing_semver = version_cache[existing_semver_str]
                 if mod_semver > existing_semver:
                     route_selections[rid] = (mod_info, route)
         # Commands
@@ -133,7 +142,10 @@ def merge_module_metadata(mod_infos: List[ModuleInfo]) -> MergeResult:
             if existing is None:
                 command_selections[cmd_id] = mod_info
             else:
-                existing_semver = Version(existing.manifest["semver"])
+                existing_semver_str = existing.manifest["semver"]
+                if existing_semver_str not in version_cache:
+                    version_cache[existing_semver_str] = Version(existing_semver_str)
+                existing_semver = version_cache[existing_semver_str]
                 if mod_semver > existing_semver:
                     command_selections[cmd_id] = mod_info
         # Keybindings

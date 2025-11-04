@@ -131,6 +131,8 @@ def run(modules_path: str) -> None:
         print("No routes defined by any module. Exiting.")
         return
     current_route = next(iter(route_map))
+    # Cache route keys list to avoid repeated conversion
+    route_keys = list(route_map.keys())
     # Interactive loop
     print("Entering TUI host. Type 'q' to quit. Available commands: 'help' for list of routes/commands.")
     while True:
@@ -174,8 +176,8 @@ def run(modules_path: str) -> None:
         # Try interpreting as integer index into routes
         if user_input.isdigit():
             idx = int(user_input) - 1
-            if 0 <= idx < len(route_map):
-                current_route = list(route_map.keys())[idx]
+            if 0 <= idx < len(route_keys):
+                current_route = route_keys[idx]
                 continue
         # Try interpreting as route id
         if user_input in route_map:
