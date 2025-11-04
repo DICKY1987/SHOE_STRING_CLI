@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TUI Module Manifest",
+  "type": "object",
+  "description": "Schema defining the structure of a TUI module manifest. This schema is intentionally strict: unknown properties are not allowed to catch typos early.",
+  "additionalProperties": false,
+  "required": ["module_id", "semver", "contract_semver", "routes"],
+  "properties": {
+    "module_id": {
+      "type": "string",
+      "description": "Unique identifier for the module (e.g. 'ledger_view').",
+      "pattern": "^[A-Za-z0-9_\\-]+$"
+    },
+    "semver": {
+      "type": "string",
+      "description": "Semantic version of the module implementation (MAJOR.MINOR.PATCH).",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "contract_semver": {
+      "type": "string",
+      "description": "Version of the module contract this module implements. Modules and hosts must agree on this.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "routes": {
+      "type": "array",
+      "description": "Routes exposed by this module. Each route defines a view mounted into a slot.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "slot"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable identifier for the route (e.g. 'ledger')."
+          },
+          "title": {
+            "type": "string",
+            "description": "Human‑readable label for the route used in navigation UI."
+          },
+          "slot": {
+            "type": "string",
+            "description": "Name of the slot in the host layout this route mounts into (e.g. 'main', 'nav', 'status', 'modal')."
+          },
+          "alias": {
+            "type": "string",
+            "description": "Optional alternate name for the route if collisions need to be resolved."
+          }
+        }
+      }
+    },
+    "widgets": {
+      "type": "array",
+      "description": "Widget definitions this module provides. Widgets are optional in this simplified implementation.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind"],
+        "properties": {
+          "id": {"type": "string"},
+          "kind": {"type": "string"},
+          "provides": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List of capabilities this widget provides (search, paginate, etc.)."
+          }
+        }
+      },
+      "default": []
+    },
+    "commands": {
+      "type": "array",
+      "description": "Command definitions this module exposes. Commands are used to trigger actions in the UI.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "description"],
+        "properties": {
+          "id": {"type": "string"},
+          "description": {"type": "string"}
+        }
+      },
+      "default": []
+    },
+    "keybindings": {
+      "type": "array",
+      "description": "Keyboard shortcuts this module wishes to register. The host is responsible for resolving conflicts.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "command"],
+        "properties": {
+          "key": {"type": "string"},
+          "command": {"type": "string"}
+        }
+      },
+      "default": []
+    },
+    "capabilities_required": {
+      "type": "array",
+      "description": "Capabilities required by this module to run. This simple implementation does not enforce capabilities.",
+      "items": {"type": "string"},
+      "default": []
+    }
+  }
+}

@@ -1,0 +1,15 @@
+module_id: ledger_view
+semver: "0.1.0"
+contract_semver: "1.0.0"
+routes:
+  - id: ledger
+    title: Ledger
+    slot: main
+widgets: []
+commands:
+  - id: ledger.reload
+    description: Reload ledger entries
+keybindings:
+  - key: r
+    command: ledger.reload
+capabilities_required: []
