@@ -48,8 +48,8 @@ class Store:
             current_state = self._state.get(namespace)
             new_state = reducer(current_state, action)
             self._state[namespace] = new_state
-        # Notify listeners (iterate directly to avoid unnecessary copy)
-        for listener in self._listeners:
+        # Notify listeners (copy to allow modifications during iteration)
+        for listener in tuple(self._listeners):
             listener(action)
 
     def get_state(self, namespace: str) -> Any:

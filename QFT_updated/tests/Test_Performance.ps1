@@ -100,5 +100,5 @@ Describe "PlanValidator Performance" {
     }
 }
 
+# Run the tests
 Write-Host "`nRunning Performance Tests..." -ForegroundColor Yellow
-Invoke-Pester -Path $PSScriptRoot/Test_Performance.ps1 -Output Detailed

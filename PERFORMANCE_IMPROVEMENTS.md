@@ -27,9 +27,9 @@ This document details the performance improvements made to the SHOE_STRING_CLI c
 **Issue**: Insufficient depth (10) and no compression  
 **Solution**: 
 - Increased depth to 20 for complex nested structures
-- Added `-Compress` flag to reduce memory and improve speed
+- Added `-Compress` flag which improves speed (13ms vs 84ms for 100 iterations)
 
-**Impact**: Better handling of complex plans without truncation
+**Impact**: Better handling of complex plans without truncation and faster JSON generation
 
 #### 4. GitAdapter.ps1 - Redundant Git Fetch
 **Issue**: Multiple `git fetch origin` calls that were unnecessary  
@@ -67,11 +67,12 @@ This document details the performance improvements made to the SHOE_STRING_CLI c
 
 #### 8. store.py - Listener Iteration
 **Issue**: Unnecessary list copy `list(self._listeners)` in dispatch  
-**Solution**: Direct iteration over `self._listeners`
-- Safe as long as listeners don't modify the list during iteration
-- Eliminates allocation overhead
+**Solution**: Changed to `tuple(self._listeners)` for safer iteration
+- Prevents issues if listeners modify the collection
+- Tuple creation has similar performance to list
+- More memory efficient than list copy
 
-**Impact**: Faster action dispatching
+**Impact**: Safer action dispatching with similar performance
 
 ## Performance Test Results
 
