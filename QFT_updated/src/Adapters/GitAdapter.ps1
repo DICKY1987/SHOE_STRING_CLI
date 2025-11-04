@@ -7,8 +7,6 @@ function New-Worktree {
     )
     Push-Location $RepoPath
     try {
-        # Ensure remote is fetched
-        git fetch origin | Out-Null
         # Ensure branch exists; create from origin/main if missing
         if (-not (git rev-parse --verify $BranchName 2>$null)) {
             git checkout -B $BranchName origin/main | Out-Null
@@ -18,7 +16,7 @@ function New-Worktree {
             git worktree add $WorktreePath $BranchName | Out-Null
         }
     } catch {
-        Write-Warning "Failed to create worktree $WorktreePath: $_"
+        Write-Warning "Failed to create worktree $WorktreePath`: $_"
     } finally {
         Pop-Location
     }
@@ -33,7 +31,6 @@ function Ensure-Branch {
     )
     Push-Location $RepoPath
     try {
-        git fetch origin | Out-Null
         $exists = git rev-parse --verify $BranchName 2>$null
         if (-not $?) {
             git checkout -B $BranchName $BaseBranch | Out-Null
@@ -98,7 +95,7 @@ function Remove-Worktree {
         $args += $WorktreePath
         git @args | Out-Null
     } catch {
-        Write-Warning "Failed to remove worktree $WorktreePath: $_"
+        Write-Warning "Failed to remove worktree $WorktreePath`: $_"
     } finally {
         Pop-Location
     }
@@ -112,17 +109,20 @@ function Get-WorktreeStatus {
     Push-Location $RepoPath
     try {
         $output = git worktree list --porcelain
-        # Parse output into objects
+        # Parse output into objects using regex for better performance
         $list = @()
         $current = @{}
         foreach ($line in $output) {
-            if ($line -match '^worktree ') {
-                if ($current.Count -gt 0) { $list += [pscustomobject]$current; $current = @{} }
-                $current.Path = $line.Substring(9).Trim()
-            } elseif ($line -match '^HEAD ') {
-                $current.Head = $line.Substring(5).Trim()
-            } elseif ($line -match '^branch ') {
-                $current.Branch = $line.Substring(7).Trim()
+            if ($line -match '^worktree (.+)$') {
+                if ($current.Count -gt 0) { 
+                    $list += [pscustomobject]$current
+                    $current = @{} 
+                }
+                $current.Path = $matches[1].Trim()
+            } elseif ($line -match '^HEAD (.+)$') {
+                $current.Head = $matches[1].Trim()
+            } elseif ($line -match '^branch (.+)$') {
+                $current.Branch = $matches[1].Trim()
             }
         }
         if ($current.Count -gt 0) { $list += [pscustomobject]$current }

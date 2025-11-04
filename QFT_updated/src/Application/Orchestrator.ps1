@@ -95,6 +95,8 @@ function Start-Orchestration {
     }
     # Jobs table: maps workstream ID to job object
     $jobs = @{}
+    # Adaptive polling: start with 100ms, max 2000ms
+    $pollInterval = 100
     # Main orchestration loop
     while ($true) {
         # Check for completed or failed jobs and update status
@@ -109,7 +111,7 @@ function Start-Orchestration {
                     Remove-Worktree -RepoPath $repo -WorktreePath $wtPath -Force
                 } Catch {
                     # Log and continue
-                    Log-Message -Message "Failed to remove worktree $wtPath: $_" -Level "warn"
+                    Log-Message -Message "Failed to remove worktree $wtPath`: $_" -Level "warn"
                 }
                 Remove-Job -Job $job -Force
                 $jobs.Remove($id)
@@ -121,7 +123,7 @@ function Start-Orchestration {
                 Try {
                     Remove-Worktree -RepoPath $repo -WorktreePath $wtPath -Force
                 } Catch {
-                    Log-Message -Message "Failed to remove worktree $wtPath: $_" -Level "warn"
+                    Log-Message -Message "Failed to remove worktree $wtPath`: $_" -Level "warn"
                 }
                 Remove-Job -Job $job -Force
                 $jobs.Remove($id)
@@ -157,7 +159,7 @@ function Start-Orchestration {
                 New-Worktree -RepoPath $repo -BranchName $ws.worktree -WorktreePath $wtPath
             } catch {
                 $status[$id] = 'failed'
-                Log-Message -Message "Failed to create worktree for $id: $_" -Level "error"
+                Log-Message -Message "Failed to create worktree for $id`: $_" -Level "error"
                 continue
             }
             # Launch aider in background job with runspace isolation
@@ -180,7 +182,15 @@ function Start-Orchestration {
         if ($status.Values -notcontains 'pending' -and $status.Values -notcontains 'running') {
             break
         }
-        Start-Sleep -Milliseconds 500
+        # Adaptive polling: if jobs are active, poll more frequently; otherwise back off
+        if ($jobs.Count -gt 0) {
+            # Active jobs: keep polling interval low
+            $pollInterval = [Math]::Max(100, $pollInterval * 0.9)
+        } else {
+            # No active jobs: back off exponentially up to 2000ms
+            $pollInterval = [Math]::Min(2000, $pollInterval * 1.5)
+        }
+        Start-Sleep -Milliseconds $pollInterval
     }
     Log-Message -Message "All workstreams have completed." -Level "info"
 }
