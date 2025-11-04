@@ -1,0 +1,30 @@
+change_id: CHG-QFT-2025-001
+summary: "Implement bare-bones TUI orchestrator for headless Aider workstreams"
+context:
+  service: QFTOrchestrator
+  bounded_context: DevTooling
+  owner_team: InternalTooling
+intent:
+  goals:
+    - "Validate plan files against PlanFile.schema.json"
+    - "Manage git worktrees for each workstream using GitAdapter"
+    - "Launch up to 5 concurrent headless Aider processes via AiderAdapter"
+    - "Respect dependencies specified in plan or dependency file"
+    - "Display status updates via PowerShell TUI"
+  non_goals:
+    - "Graphical UI outside console"
+    - "Exceeding concurrency limit of 5"
+contracts:
+  - api: { spec: QFT/schemas/PlanFile.schema.json, change_type: additive }
+  - api: { spec: QFT/schemas/DependencyFile.schema.json, change_type: additive }
+feature_flag:
+  key: enable_qft_orchestrator
+  default: off
+verification:
+  test_plan:
+    - "Pester tests for PlanValidator and Orchestrator"
+rollback:
+  trigger: { error_rate_pct: ">5" }
+  steps:
+    - "Disable feature flag"
+    - "Remove QFT modules"
